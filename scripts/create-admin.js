@@ -2,7 +2,7 @@ const bcrypt = require("bcrypt");
 const prisma = require("../src/config/prisma");
 
 async function main() {
-  const email = "ritvarsmm@gmail.com";
+  const email = "mritvars@gmail.com";
   const plainPassword = "audia4b6";
 
   const existingAdmin = await prisma.admin.findUnique({
