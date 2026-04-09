@@ -20,9 +20,12 @@ router.post("/upload", requireAdmin, (req, res) => {
       });
     }
 
+    const baseUrl =
+      process.env.PUBLIC_BACKEND_URL || `${req.protocol}://${req.get("host")}`;
+
     return res.status(200).json({
       ok: true,
-      imageUrl: `/uploads/${req.file.filename}`,
+      imageUrl: `${baseUrl}/uploads/${req.file.filename}`,
     });
   });
 });
