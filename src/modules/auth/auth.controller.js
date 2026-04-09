@@ -13,10 +13,12 @@ async function login(req, res) {
 
     const result = await loginAdmin(email, password);
 
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.cookie("token", result.token, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -35,17 +37,19 @@ async function login(req, res) {
 }
 
 function logout(req, res) {
-  res.clearCookie("token");
+  const isProduction = process.env.NODE_ENV === "production";
+
+  res.clearCookie("token", {
+    httpOnly: true,
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction,
+  });
+
   return res.json({
     ok: true,
     message: "Izlogots",
   });
 }
-
-module.exports = {
-  login,
-  logout,
-};
 
 function me(req, res) {
   return res.json({
