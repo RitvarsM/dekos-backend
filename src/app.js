@@ -22,13 +22,8 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Atļaujam запросus bez origin (piem. Postman, server-to-server)
       if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
+      if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error(`CORS nav atļauts šim origin: ${origin}`));
     },
     credentials: true,
@@ -41,13 +36,31 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
+// ROOT ROUTE
+app.get("/", (req, res) => {
+  res.status(200).json({
+    ok: true,
+    message: "DEKOS backend darbojas",
+  });
+});
+
+// HEALTH ROUTE
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
+  res.status(200).json({ ok: true });
 });
 
 app.use("/api/auth", authRoutes);
 app.use("/api/blog", blogRoutes);
 app.use("/api/offer", offerRoutes);
 app.use("/api/contact", contactRoutes);
+
+// ERROR HANDLER
+app.use((err, req, res, next) => {
+  console.error("Servera kļūda:", err);
+  res.status(500).json({
+    ok: false,
+    message: "Iekšēja servera kļūda",
+  });
+});
 
 module.exports = app;
