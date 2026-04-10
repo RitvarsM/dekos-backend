@@ -6,7 +6,7 @@ function getTransporter() {
   const user = process.env.EMAIL_USER;
   const pass = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
 
-  if (!host || !port || !user || !pass) {
+  if (!host || !user || !pass) {
     throw new Error("Trūkst EMAIL konfigurācijas mainīgie.");
   }
 
@@ -18,6 +18,9 @@ function getTransporter() {
       user,
       pass,
     },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
     tls: {
       rejectUnauthorized: false,
     },
@@ -44,9 +47,6 @@ exports.sendContactMessage = async (req, res) => {
     }
 
     const transporter = getTransporter();
-
-    await transporter.verify();
-    console.log("SMTP verify OK (contact).");
 
     const adminHtml = `
       <h2>Jauna ziņa no DEKOS kontaktformas</h2>
@@ -89,6 +89,13 @@ exports.sendContactMessage = async (req, res) => {
     });
   } catch (error) {
     console.error("Kļūda sūtot kontaktformas ziņu:", error);
+
+    if (error.code === "ETIMEDOUT") {
+      return res.status(500).json({
+        message: "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
+      });
+    }
+
     return res.status(500).json({
       message: error.message || "Servera kļūda. Ziņu neizdevās nosūtīt.",
     });
