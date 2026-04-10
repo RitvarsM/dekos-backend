@@ -16,6 +16,8 @@ const allowedOrigins = [
   "http://localhost:5500",
   "http://127.0.0.1:3000",
   "http://localhost:3000",
+  "https://dekos.lv",
+  "https://www.dekos.lv",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
@@ -23,7 +25,12 @@ app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.error("Bloķēts CORS origin:", origin);
       return callback(new Error(`CORS nav atļauts šim origin: ${origin}`));
     },
     credentials: true,
@@ -36,15 +43,14 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// ROOT ROUTE
 app.get("/", (req, res) => {
   res.status(200).json({
     ok: true,
     message: "DEKOS backend darbojas",
+    allowedOrigins,
   });
 });
 
-// HEALTH ROUTE
 app.get("/api/health", (req, res) => {
   res.status(200).json({ ok: true });
 });
@@ -54,12 +60,12 @@ app.use("/api/blog", blogRoutes);
 app.use("/api/offer", offerRoutes);
 app.use("/api/contact", contactRoutes);
 
-// ERROR HANDLER
 app.use((err, req, res, next) => {
   console.error("Servera kļūda:", err);
+
   res.status(500).json({
     ok: false,
-    message: "Iekšēja servera kļūda",
+    message: err.message || "Iekšēja servera kļūda",
   });
 });
 

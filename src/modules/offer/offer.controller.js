@@ -18,12 +18,9 @@ function getTransporter() {
       user,
       pass,
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
-    tls: {
-      rejectUnauthorized: false,
-    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
 }
 
@@ -56,10 +53,15 @@ exports.sendOfferMessage = async (req, res) => {
 
     const transporter = getTransporter();
 
+    await transporter.verify();
+    console.log("SMTP savienojums veiksmīgs.");
+
     const servicesHtml =
       Array.isArray(services) && services.length
-        ? `<ul>${services.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
-        : "<p>Nav norādīts</p>";
+        ? `<ul>${services
+            .map((item) => `<li>${escapeHtml(item)}</li>`)
+            .join("")}</ul>`
+        : `<p>Nav norādīts</p>`;
 
     const adminHtml = `
       <h2>Jauns piedāvājuma pieprasījums</h2>
@@ -76,10 +78,11 @@ exports.sendOfferMessage = async (req, res) => {
     const receiverAddress = process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
 
     const result = await transporter.sendMail({
-      from: fromAddress,
+      from: `"DEKOS" <${fromAddress}>`,
       to: receiverAddress,
       subject: "Jauns piedāvājuma pieprasījums | DEKOS",
       html: adminHtml,
+      replyTo: fromAddress,
     });
 
     console.log("Offer email nosūtīts:", result.messageId);
@@ -92,12 +95,21 @@ exports.sendOfferMessage = async (req, res) => {
 
     if (error.code === "ETIMEDOUT") {
       return res.status(500).json({
-        message: "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
+        message:
+          "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
+      });
+    }
+
+    if (error.code === "EAUTH") {
+      return res.status(500).json({
+        message:
+          "Neizdevās autorizēties Gmail SMTP. Pārbaudi EMAIL_USER un EMAIL_PASS.",
       });
     }
 
     return res.status(500).json({
-      message: error.message || "Servera kļūda. Pieteikumu neizdevās nosūtīt.",
+      message:
+        error.message || "Servera kļūda. Pieteikumu neizdevās nosūtīt.",
     });
   }
 };

@@ -18,12 +18,9 @@ function getTransporter() {
       user,
       pass,
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
-    tls: {
-      rejectUnauthorized: false,
-    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
 }
 
@@ -48,6 +45,12 @@ exports.sendContactMessage = async (req, res) => {
 
     const transporter = getTransporter();
 
+    await transporter.verify();
+    console.log("SMTP savienojums veiksmīgs.");
+
+    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    const receiverAddress = process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
+
     const adminHtml = `
       <h2>Jauna ziņa no DEKOS kontaktformas</h2>
       <p><strong>Vārds:</strong> ${escapeHtml(name)}</p>
@@ -58,11 +61,8 @@ exports.sendContactMessage = async (req, res) => {
       <p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>
     `;
 
-    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-    const receiverAddress = process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
-
     const adminResult = await transporter.sendMail({
-      from: fromAddress,
+      from: `"DEKOS" <${fromAddress}>`,
       to: receiverAddress,
       subject: `Jauna kontaktformas ziņa: ${subject}`,
       html: adminHtml,
@@ -71,15 +71,17 @@ exports.sendContactMessage = async (req, res) => {
 
     console.log("Admin email nosūtīts:", adminResult.messageId);
 
+    const customerHtml = `
+      <h2>Sveiki, ${escapeHtml(name)}!</h2>
+      <p>Paldies par jūsu ziņu. Esam to saņēmuši un drīzumā ar jums sazināsimies.</p>
+      <p>Ar cieņu,<br>DEKOS</p>
+    `;
+
     const customerResult = await transporter.sendMail({
-      from: fromAddress,
+      from: `"DEKOS" <${fromAddress}>`,
       to: email,
       subject: "Esam saņēmuši jūsu ziņu | DEKOS",
-      html: `
-        <p>Sveiki, ${escapeHtml(name)}!</p>
-        <p>Paldies par jūsu ziņu. Esam to saņēmuši un drīzumā ar jums sazināsimies.</p>
-        <p>Ar cieņu,<br>DEKOS</p>
-      `,
+      html: customerHtml,
     });
 
     console.log("Customer email nosūtīts:", customerResult.messageId);
@@ -92,7 +94,15 @@ exports.sendContactMessage = async (req, res) => {
 
     if (error.code === "ETIMEDOUT") {
       return res.status(500).json({
-        message: "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
+        message:
+          "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
+      });
+    }
+
+    if (error.code === "EAUTH") {
+      return res.status(500).json({
+        message:
+          "Neizdevās autorizēties Gmail SMTP. Pārbaudi EMAIL_USER un EMAIL_PASS.",
       });
     }
 
