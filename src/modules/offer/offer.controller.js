@@ -1,26 +1,27 @@
 const nodemailer = require("nodemailer");
 
-function getTransporter() {
-  const host = process.env.EMAIL_HOST;
+function createTransporter() {
+  const host = process.env.EMAIL_HOST || "smtp.gmail.com";
   const port = Number(process.env.EMAIL_PORT || 587);
   const user = process.env.EMAIL_USER;
   const pass = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
 
-  if (!host || !user || !pass) {
-    throw new Error("Trūkst EMAIL konfigurācijas mainīgie.");
+  if (!user || !pass) {
+    throw new Error("Trūkst EMAIL_USER vai EMAIL_PASS.");
   }
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure: false, // portam 587 jābūt false
     auth: {
       user,
       pass,
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    family: 4, // piespiež IPv4, lai neiet uz IPv6
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 25000,
   });
 }
 
@@ -43,73 +44,49 @@ exports.sendOfferMessage = async (req, res) => {
       });
     }
 
-    console.log("JAUNS OFFER:", {
-      name,
-      phone,
-      objectType,
-      services,
-      message,
-    });
-
-    const transporter = getTransporter();
+    const transporter = createTransporter();
 
     await transporter.verify();
-    console.log("SMTP savienojums veiksmīgs.");
+    console.log("SMTP verify OK");
+
+    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    const receiverAddress =
+      process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
 
     const servicesHtml =
       Array.isArray(services) && services.length
-        ? `<ul>${services
-            .map((item) => `<li>${escapeHtml(item)}</li>`)
-            .join("")}</ul>`
-        : `<p>Nav norādīts</p>`;
+        ? `<ul>${services.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+        : "<p>Nav izvēlēts neviens pakalpojums.</p>";
 
-    const adminHtml = `
+    const html = `
       <h2>Jauns piedāvājuma pieprasījums</h2>
       <p><strong>Vārds:</strong> ${escapeHtml(name || "-")}</p>
       <p><strong>Telefons:</strong> ${escapeHtml(phone)}</p>
       <p><strong>Objekta veids:</strong> ${escapeHtml(objectType || "-")}</p>
-      <p><strong>Nepieciešamie darbi:</strong></p>
+      <p><strong>Pakalpojumi:</strong></p>
       ${servicesHtml}
       <p><strong>Papildus info:</strong></p>
       <p>${escapeHtml(message || "-").replace(/\n/g, "<br>")}</p>
     `;
 
-    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-    const receiverAddress = process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
-
-    const result = await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"DEKOS" <${fromAddress}>`,
       to: receiverAddress,
       subject: "Jauns piedāvājuma pieprasījums | DEKOS",
-      html: adminHtml,
+      html,
       replyTo: fromAddress,
     });
 
-    console.log("Offer email nosūtīts:", result.messageId);
+    console.log("Nosūtīts:", info.messageId);
 
     return res.status(200).json({
       message: "Pieteikums veiksmīgi nosūtīts.",
     });
   } catch (error) {
-    console.error("Kļūda sūtot piedāvājuma formu:", error);
-
-    if (error.code === "ETIMEDOUT") {
-      return res.status(500).json({
-        message:
-          "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
-      });
-    }
-
-    if (error.code === "EAUTH") {
-      return res.status(500).json({
-        message:
-          "Neizdevās autorizēties Gmail SMTP. Pārbaudi EMAIL_USER un EMAIL_PASS.",
-      });
-    }
+    console.error("Offer form error:", error);
 
     return res.status(500).json({
-      message:
-        error.message || "Servera kļūda. Pieteikumu neizdevās nosūtīt.",
+      message: error.message || "Neizdevās nosūtīt pieteikumu.",
     });
   }
 };

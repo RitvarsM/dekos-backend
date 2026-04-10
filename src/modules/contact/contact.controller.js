@@ -1,26 +1,27 @@
 const nodemailer = require("nodemailer");
 
-function getTransporter() {
-  const host = process.env.EMAIL_HOST;
+function createTransporter() {
+  const host = process.env.EMAIL_HOST || "smtp.gmail.com";
   const port = Number(process.env.EMAIL_PORT || 587);
   const user = process.env.EMAIL_USER;
   const pass = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
 
-  if (!host || !user || !pass) {
-    throw new Error("Trūkst EMAIL konfigurācijas mainīgie.");
+  if (!user || !pass) {
+    throw new Error("Trūkst EMAIL_USER vai EMAIL_PASS.");
   }
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure: false,
     auth: {
       user,
       pass,
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    family: 4,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 25000,
   });
 }
 
@@ -43,16 +44,17 @@ exports.sendContactMessage = async (req, res) => {
       });
     }
 
-    const transporter = getTransporter();
+    const transporter = createTransporter();
 
     await transporter.verify();
-    console.log("SMTP savienojums veiksmīgs.");
+    console.log("SMTP verify OK");
 
     const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-    const receiverAddress = process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
+    const receiverAddress =
+      process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
 
     const adminHtml = `
-      <h2>Jauna ziņa no DEKOS kontaktformas</h2>
+      <h2>Jauna ziņa no kontaktformas</h2>
       <p><strong>Vārds:</strong> ${escapeHtml(name)}</p>
       <p><strong>Telefons:</strong> ${escapeHtml(phone)}</p>
       <p><strong>E-pasts:</strong> ${escapeHtml(email)}</p>
@@ -61,7 +63,7 @@ exports.sendContactMessage = async (req, res) => {
       <p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>
     `;
 
-    const adminResult = await transporter.sendMail({
+    await transporter.sendMail({
       from: `"DEKOS" <${fromAddress}>`,
       to: receiverAddress,
       subject: `Jauna kontaktformas ziņa: ${subject}`,
@@ -69,45 +71,14 @@ exports.sendContactMessage = async (req, res) => {
       replyTo: email,
     });
 
-    console.log("Admin email nosūtīts:", adminResult.messageId);
-
-    const customerHtml = `
-      <h2>Sveiki, ${escapeHtml(name)}!</h2>
-      <p>Paldies par jūsu ziņu. Esam to saņēmuši un drīzumā ar jums sazināsimies.</p>
-      <p>Ar cieņu,<br>DEKOS</p>
-    `;
-
-    const customerResult = await transporter.sendMail({
-      from: `"DEKOS" <${fromAddress}>`,
-      to: email,
-      subject: "Esam saņēmuši jūsu ziņu | DEKOS",
-      html: customerHtml,
-    });
-
-    console.log("Customer email nosūtīts:", customerResult.messageId);
-
     return res.status(200).json({
       message: "Ziņa veiksmīgi nosūtīta.",
     });
   } catch (error) {
-    console.error("Kļūda sūtot kontaktformas ziņu:", error);
-
-    if (error.code === "ETIMEDOUT") {
-      return res.status(500).json({
-        message:
-          "Neizdevās pieslēgties e-pasta serverim. Pārbaudi SMTP iestatījumus.",
-      });
-    }
-
-    if (error.code === "EAUTH") {
-      return res.status(500).json({
-        message:
-          "Neizdevās autorizēties Gmail SMTP. Pārbaudi EMAIL_USER un EMAIL_PASS.",
-      });
-    }
+    console.error("Contact form error:", error);
 
     return res.status(500).json({
-      message: error.message || "Servera kļūda. Ziņu neizdevās nosūtīt.",
+      message: error.message || "Neizdevās nosūtīt ziņu.",
     });
   }
 };
