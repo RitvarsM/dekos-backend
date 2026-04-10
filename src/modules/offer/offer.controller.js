@@ -1,29 +1,6 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-function createTransporter() {
-  const host = process.env.EMAIL_HOST || "smtp.gmail.com";
-  const port = Number(process.env.EMAIL_PORT || 587);
-  const user = process.env.EMAIL_USER;
-  const pass = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
-
-  if (!user || !pass) {
-    throw new Error("Trūkst EMAIL_USER vai EMAIL_PASS.");
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: false, // portam 587 jābūt false
-    auth: {
-      user,
-      pass,
-    },
-    family: 4, // piespiež IPv4, lai neiet uz IPv6
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 25000,
-  });
-}
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function escapeHtml(value = "") {
   return String(value)
@@ -44,14 +21,8 @@ exports.sendOfferMessage = async (req, res) => {
       });
     }
 
-    const transporter = createTransporter();
-
-    await transporter.verify();
-    console.log("SMTP verify OK");
-
-    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
     const receiverAddress =
-      process.env.RECEIVER_EMAIL || process.env.EMAIL_USER;
+      process.env.RECEIVER_EMAIL || "tavs@gmail.com";
 
     const servicesHtml =
       Array.isArray(services) && services.length
@@ -69,15 +40,12 @@ exports.sendOfferMessage = async (req, res) => {
       <p>${escapeHtml(message || "-").replace(/\n/g, "<br>")}</p>
     `;
 
-    const info = await transporter.sendMail({
-      from: `"DEKOS" <${fromAddress}>`,
+    await resend.emails.send({
+      from: "DEKOS <onboarding@resend.dev>",
       to: receiverAddress,
       subject: "Jauns piedāvājuma pieprasījums | DEKOS",
       html,
-      replyTo: fromAddress,
     });
-
-    console.log("Nosūtīts:", info.messageId);
 
     return res.status(200).json({
       message: "Pieteikums veiksmīgi nosūtīts.",
